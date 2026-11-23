@@ -15,7 +15,7 @@ const MODES=Object.freeze({
   easy: {gap:204,minGap:178,speed:100,maxSpeed:130,spacing:211,swing:66},
   normal: {gap:171,minGap:143,speed:119,maxSpeed:155,spacing:194,swing:74},
   hard: {gap:142,minGap:122,speed:139,maxSpeed:177,spacing:181,swing:78},
-  insane: {gap:122,minGap:110,speed:162,maxSpeed:195,spacing:172,swing:80}
+  insane: {gap:80,minGap:72,speed:225,maxSpeed:265,spacing:192,swing:40}
 });
 const MODE_KEY="gapJumpDifficulty";
 function validMode(mode){return Object.hasOwn(MODES,mode)?mode:"normal";}
