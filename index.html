@@ -1,39 +1,85 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gap Jump</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:white;color:black;font-family:system-ui,sans-serif;display:grid;min-height:100svh;place-items:center;padding:14px}main{width:min(100%,390px,calc(100svh * .69));min-width:min(100%,240px)}header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}h1{font-size:20px;margin:0;letter-spacing:-.05em}#score{font-size:16px;font-variant-numeric:tabular-nums;font-weight:700}#field{position:relative;border:2px solid black;touch-action:manipulation}canvas{width:100%;height:auto;display:block}#card{position:absolute;top:38%;left:12%;width:76%;text-align:center;background:white;border:2px solid black;padding:14px 5px}#card[hidden]{display:none}h2{margin:0 0 4px;font-size:clamp(16px,4vw,25px);letter-spacing:-.04em}p{margin:4px 0 10px;font-size:13px}button{background:black;color:white;border:2px solid black;border-radius:0;font:inherit;font-weight:700;cursor:pointer;padding:6px 15px;min-height:44px}button:focus-visible{outline:2px solid black;outline-offset:3px}footer{font-size:12px;margin-top:9px;letter-spacing:.02em}
+*{box-sizing:border-box}body{margin:0;background:white;color:black;font-family:system-ui,sans-serif;display:grid;min-height:100svh;place-items:center;padding:14px}main{width:min(100%,390px,calc(100svh * .69));min-width:min(100%,240px)}header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}h1{font-size:20px;margin:0;letter-spacing:-.05em}#score{font-size:16px;font-variant-numeric:tabular-nums;font-weight:700}#field{position:relative;border:2px solid black}canvas{width:100%;height:auto;display:block;touch-action:none} .mode{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:650}.mode select{font:inherit;color:black;background:white;border:1px solid black;border-radius:0;padding:0 8px;min-height:44px;touch-action:manipulation}.mode select:disabled{opacity:1;color:black}#card{position:absolute;top:38%;left:12%;width:76%;text-align:center;background:white;border:2px solid black;padding:14px 5px}#card[hidden]{display:none}h2{margin:0 0 4px;font-size:clamp(16px,4vw,25px);letter-spacing:-.04em}p{margin:4px 0 10px;font-size:13px}button{touch-action:manipulation;background:black;color:white;border:2px solid black;border-radius:0;font:inherit;font-weight:700;cursor:pointer;padding:6px 15px;min-height:44px}button:focus-visible{outline:2px solid black;outline-offset:3px}footer{font-size:12px;margin-top:9px;letter-spacing:.02em}
 </style>
 <main><header><h1>Gap Jump</h1><div id="score">Score 0</div></header>
+<label class="mode" for="mode">Difficulty <select id="mode"><option value="super-easy">Super Easy</option><option value="easy">Easy</option><option value="normal" selected>Normal</option><option value="hard">Hard</option><option value="insane">Insane</option></select></label>
 <div id="field"><canvas width="360" height="450" aria-label="Play field: jump the circle through gaps in the rectangles."></canvas><div id="card"><h2 id="headline">Find the gap.</h2><p id="detail">One jump at a time.</p><button type="button" id="button">Start</button></div></div>
 <footer>Tap, click, or press Space to jump.</footer></main>
 <script>
 "use strict";
-const W=360,H=450,X=80,R=13, PW=52;
-function make(random=Math.random){return {random,phase:"ready",y:205,vy:0,score:0,pipes:[],clock:0};}
-function flap(s){if(s.phase!=="play"){s.phase="play";s.y=205;s.score=0;s.pipes=[{x:305,mid:215,gap:166,scored:false}];s.clock=0;}s.vy=-285;}
+const W=360,H=450,X=80,R=13,PW=52;
+const MODES=Object.freeze({
+  "super-easy": {gap:242,minGap:218,speed:84,maxSpeed:106,spacing:226,swing:48},
+  easy: {gap:204,minGap:178,speed:100,maxSpeed:130,spacing:211,swing:66},
+  normal: {gap:171,minGap:143,speed:119,maxSpeed:155,spacing:194,swing:74},
+  hard: {gap:142,minGap:122,speed:139,maxSpeed:177,spacing:181,swing:78},
+  insane: {gap:122,minGap:110,speed:162,maxSpeed:195,spacing:172,swing:80}
+});
+const MODE_KEY="gapJumpDifficulty";
+function validMode(mode){return Object.hasOwn(MODES,mode)?mode:"normal";}
+function readMode(){try{return validMode(localStorage.getItem(MODE_KEY));}catch{return "normal";}}
+function saveMode(mode){try{localStorage.setItem(MODE_KEY,mode);}catch{}}
+function make(mode="normal",random=Math.random){return {random,mode:validMode(mode),phase:"ready",y:205,vy:0,score:0,pipes:[]};}
+function flap(s){
+  if(s.phase!=="play"){s.phase="play";s.y=205;s.score=0;s.pipes=[{x:305,mid:215,gap:MODES[s.mode].gap,scored:false}];}
+  s.vy=-285;
+}
 function hit(x,y,px,py,w,h){const dx=x-Math.max(px,Math.min(x,px+w)),dy=y-Math.max(py,Math.min(y,py+h));return dx*dx+dy*dy<=R*R;}
-function tick(s,dt){if(s.phase!=="play")return;s.clock+=dt;s.vy+=780*dt;s.y+=s.vy*dt;
-const speed=119+Math.min(65,s.score*2.8);
-for(const p of s.pipes)p.x-=dt*speed;
-let last=s.pipes[s.pipes.length-1];
-if(last.x<=W-190){const gap=166-Math.min(37,s.score*1.5);const mid=Math.max(gap/2+25,Math.min(H-gap/2-25,last.mid+(s.random()-.5)*145));s.pipes.push({x:last.x+190,mid,gap,scored:false});}
-while(s.pipes[0].x+PW<0)s.pipes.shift();
-if(s.y-R<=0||s.y+R>=H||s.pipes.some(p=>{const a=p.mid-p.gap/2,b=p.mid+p.gap/2;return hit(X,s.y,p.x,0,PW,a)||hit(X,s.y,p.x,b,PW,H-b);})){s.phase="over";return;}
-for(const p of s.pipes)if(!p.scored&&p.x+PW<X-R){p.scored=true;s.score++;}
+function tick(s,dt){
+  if(s.phase!=="play")return;
+  const d=MODES[s.mode];
+  s.vy+=780*dt;s.y+=s.vy*dt;
+  const speed=Math.min(d.maxSpeed,d.speed+s.score*2.5);
+  for(const p of s.pipes)p.x-=dt*speed;
+  const last=s.pipes[s.pipes.length-1];
+  if(last.x<=W-d.spacing){
+    const gap=Math.max(d.minGap,d.gap-s.score*1.35);
+    const mid=Math.max(gap/2+25,Math.min(H-gap/2-25,last.mid+(s.random()-.5)*2*d.swing));
+    s.pipes.push({x:last.x+d.spacing,mid,gap,scored:false});
+  }
+  while(s.pipes[0].x+PW<0)s.pipes.shift();
+  if(s.y-R<=0||s.y+R>=H||s.pipes.some(p=>{const a=p.mid-p.gap/2,b=p.mid+p.gap/2;return hit(X,s.y,p.x,0,PW,a)||hit(X,s.y,p.x,b,PW,H-b);})){s.phase="over";return;}
+  for(const p of s.pipes)if(!p.scored&&p.x+PW<X-R){p.scored=true;s.score++;}
 }
-const canvas=document.querySelector("canvas"), ctx=canvas.getContext("2d"), card=document.querySelector("#card"), score=document.querySelector("#score"), button=document.querySelector("#button"), s=make();let last=null,shown=-1;
-function input(){const fresh=s.phase!=="play";flap(s);if(fresh){last=null;card.hidden=true;} }
-document.querySelector("#field").addEventListener("pointerdown",e=>{if(e.button===0&&!e.target.closest("button"))input();});
+const canvas=document.querySelector("canvas"),ctx=canvas.getContext("2d"),card=document.querySelector("#card"),score=document.querySelector("#score"),button=document.querySelector("#button"),mode=document.querySelector("#mode"),headline=document.querySelector("#headline"),detail=document.querySelector("#detail");
+const s=make(readMode()); mode.value=s.mode;
+let last=null,shown=-1;
+function input(){
+  const fresh=s.phase!=="play";flap(s);
+  if(fresh){last=null;mode.disabled=true;card.hidden=true;}
+}
+const hasPointer="PointerEvent" in window;
+if(hasPointer)canvas.addEventListener("pointerdown",e=>{if(e.isPrimary&&e.button===0)input();});
+// Cancel only playfield touch defaults as an extra guard for mobile Safari.
+canvas.addEventListener("touchstart",e=>{
+  if(e.cancelable)e.preventDefault();
+  if(!hasPointer&&e.touches.length===1)input();
+},{passive:false});
+if(!hasPointer)canvas.addEventListener("mousedown",e=>{if(e.button===0)input();});
 button.addEventListener("click",input);
-window.addEventListener("keydown",e=>{if(e.code!=="Space"||e.repeat||e.target===button)return;e.preventDefault();input();});
-function draw(){ctx.fillStyle="white";ctx.fillRect(0,0,W,H);ctx.fillStyle="black";
-for(const p of s.pipes){const a=p.mid-p.gap/2,b=p.mid+p.gap/2;ctx.fillRect(p.x,0,PW,a);ctx.fillRect(p.x,b,PW,H-b);}
-if(s.phase==="ready"){ctx.fillRect(268,0,48,125);ctx.fillRect(268,295,48,155);}
-ctx.beginPath();ctx.arc(X,s.y,R,0,2*Math.PI);ctx.fill();
-if(shown!==s.score){score.textContent="Score "+s.score;shown=s.score;}
+mode.addEventListener("change",()=>{
+  if(s.phase==="play")return;
+  const chosen=validMode(mode.value);
+  Object.assign(s,make(chosen,s.random));mode.value=chosen;saveMode(chosen);
+  headline.textContent="Find the gap.";detail.textContent="One jump at a time.";button.textContent="Start";
+});
+window.addEventListener("keydown",e=>{
+  if(e.code!=="Space"||e.repeat||e.target===button||e.target===mode)return;
+  e.preventDefault();input();
+});
+function draw(){
+  ctx.fillStyle="white";ctx.fillRect(0,0,W,H);ctx.fillStyle="black";
+  for(const p of s.pipes){const a=p.mid-p.gap/2,b=p.mid+p.gap/2;ctx.fillRect(p.x,0,PW,a);ctx.fillRect(p.x,b,PW,H-b);}
+  if(s.phase==="ready"){const gap=MODES[s.mode].gap,a=215-gap/2,b=215+gap/2;ctx.fillRect(268,0,PW,a);ctx.fillRect(268,b,PW,H-b);}
+  ctx.beginPath();ctx.arc(X,s.y,R,0,2*Math.PI);ctx.fill();
+  if(shown!==s.score){score.textContent="Score "+s.score;shown=s.score;}
 }
-function frame(t){const phase=s.phase;const dt=last===null?0:Math.min((t-last)/1000,.032);last=t;tick(s,dt);draw();
-if(phase==="play"&&s.phase==="over"){document.querySelector("#headline").textContent="Game over.";document.querySelector("#detail").textContent="Score "+s.score;button.textContent="Retry";card.hidden=false;}
-requestAnimationFrame(frame);}
+function frame(t){
+  const phase=s.phase,dt=last===null?0:Math.min((t-last)/1000,.032);last=t;tick(s,dt);draw();
+  if(phase==="play"&&s.phase==="over"){mode.disabled=false;headline.textContent="Game over.";detail.textContent="Score "+s.score;button.textContent="Retry";card.hidden=false;}
+  requestAnimationFrame(frame);
+}
 requestAnimationFrame(frame);
 </script></html>
